@@ -1,8 +1,12 @@
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use i3ipc::I3Connection;
+
+mod model;
+use model::Repository;
+use rusqlite::Connection;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -53,16 +57,6 @@ enum PinCommands {
     },
 }
 
-struct View {
-    name: String,
-    id: String,
-}
-
-struct Project {
-    name: String,
-    tags: Vec<View>,
-}
-
 fn test(list: bool) {
     if list {
         println!("Printing testing lists...");
@@ -92,7 +86,9 @@ impl WindowManager {
 
     fn focus(&mut self, workspace: &str) {
         let cmd = format!("workspace {}", workspace);
-        self.connection.run_command(&cmd).expect("Failed to run `workspace` command");
+        self.connection
+            .run_command(&cmd)
+            .expect("Failed to run `workspace` command");
     }
 }
 
@@ -136,6 +132,23 @@ fn main() {
         _ => println!("Don't be crazy"),
     }
 
+    let conn = Connection::open_in_memory().unwrap();
+    let repo = Repository::new(conn);
+    let _ = repo;
+    // let mut project = Project::new("Project 1")
+    //     .add_new_view("1", "View 1")
+    //     .add_new_view("2", "View 2");
+    // model.add_project(project);
+    //
+    // project = Project::new("Project 2");
+    // project.add_view(View::new("3", "View 3"));
+    // project.add_view(View::new("4", "View 4"));
+    // model.add_project(project.clone());
+    //
+    // model.set_active_project(project);
+    //
+    // let v = model.find_view("Not Found", "Tag 1");
+
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
@@ -145,14 +158,12 @@ fn main() {
         Some(Commands::Run { jump }) => {
             run(*jump);
         }
-        Some(Commands::Pin { command }) => {
-            match command {
-                PinCommands::Focus { name } => {
-                    let workspace = pins.get(name).expect("No such pin");
-                    i3.focus(&workspace);
-                }
+        Some(Commands::Pin { command }) => match command {
+            PinCommands::Focus { name } => {
+                let workspace = pins.get(name).expect("No such pin");
+                i3.focus(&workspace);
             }
-        }
+        },
 
         None => {}
     }

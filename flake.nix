@@ -37,6 +37,7 @@
         devShells.default = pkgs.mkShell {
           buildInputs = [
             rustToolchain
+            pkgs.rust-analyzer
             pkgs.nixfmt-rfc-style
             pkgs.jujutsu
           ];
