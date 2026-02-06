@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct View {
@@ -18,6 +20,7 @@ pub struct Project {
 pub struct Repository {
     conn: Connection,
     default_view_name: String,
+    pins: HashMap<String, String>,
 }
 
 impl Repository {
@@ -49,6 +52,26 @@ impl Repository {
         Ok(Self {
             conn: conn,
             default_view_name: "view".to_string(),
+            pins: HashMap::from([
+                // pre-defined pins
+                ("g".to_string(), "admin#view".to_string()),
+                ("f".to_string(), "dev#view".to_string()),
+                ("d".to_string(), "ref#view".to_string()),
+                ("s".to_string(), "ai#view".to_string()),
+                ("a".to_string(), "chat#view".to_string()),
+                ("`".to_string(), "share#view".to_string()),
+                // user-defined pins
+                ("0".to_string(), "0.open".to_string()),
+                ("1".to_string(), "1.open".to_string()),
+                ("2".to_string(), "2.open".to_string()),
+                ("3".to_string(), "3.open".to_string()),
+                ("4".to_string(), "4.open".to_string()),
+                ("5".to_string(), "5.open".to_string()),
+                ("6".to_string(), "6.open".to_string()),
+                ("7".to_string(), "7.open".to_string()),
+                ("8".to_string(), "8.open".to_string()),
+                ("9".to_string(), "9.open".to_string()),
+            ]),
         })
     }
 
@@ -97,6 +120,23 @@ impl Repository {
             .ok()?
     }
 
+    pub fn get_project_by_name(&self, name: &str) -> Option<Project> {
+        self.conn
+            .query_row(
+                "SELECT id, name, active_view_id FROM projects WHERE name = ?1",
+                params![name],
+                |row| {
+                    Ok(Project {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        active_view_id: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .ok()?
+    }
+
     pub fn get_active_view_for_project(&self, project: &Project) -> Option<View> {
         self.conn
             .query_row(
@@ -114,7 +154,7 @@ impl Repository {
             .ok()?
     }
 
-    pub fn get_window_manager_id(&self, view: &View) -> Option<String> {
+    pub fn get_window_manager_display_name(&self, view: &View) -> Option<String> {
         let project_name = self
             .conn
             .query_row(
@@ -123,91 +163,28 @@ impl Repository {
                 |row| row.get::<_, String>(0),
             )
             .ok()?;
-        Some(format!("{}#{}#{}", view.id, project_name, view.name))
+        Some(format!("{}#{}", project_name, view.name))
     }
 
-    // pub fn add_project(&mut self, project: Project) {
-    //     self.projects.push(project);
-    // }
-    //
-    // pub fn find_view(&self, project: &str, tag: &str) -> Option<&View> {
-    //     self.find_project(project).and_then(|p| p.find_view(tag))
-    // }
-    //
-    // pub fn find_project(&self, project: &str) -> Option<&Project> {
-    //     self.projects.iter().find(|p| p.name == project)
-    // }
-    //
-    // pub fn set_active_project(&mut self, project: Project) {
-    //     self.active = Some(project);
-    // }
+    pub fn get_view_for_pin_key(&self, key: &str) -> Option<View> {
+        // this is a pretty big hack but should improve once we implement
+        // the pin table
+        let display_name_hack = self.pins.get(key)?;
+        let parts = display_name_hack.split("#").collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            return None;
+        }
+
+        let project_name = parts[0];
+        let view_name = parts[1];
+        let project = self.get_project_by_name(project_name)?;
+        let view = self.get_active_view_for_project(&project)?;
+        if view.name != view_name {
+            return None;
+        }
+        Some(view)
+    }
 }
-
-// fn main() -> Result<()> {
-//     // let conn = Connection::open("app.db")?;
-//     let conn = Connection::open_in_memory()?;
-//
-//     conn.pragma_update(None, "foreign_keys", "ON")?;
-//     // Optional, but fine even for single-writer:
-//     conn.busy_timeout(std::time::Duration::from_secs(2))?;
-//
-//     conn.execute_batch(
-//         r#"
-//         CREATE TABLE IF NOT EXISTS tasks (
-//             id    INTEGER PRIMARY KEY,
-//             title TEXT NOT NULL UNIQUE,
-//             done  INTEGER NOT NULL DEFAULT 0
-//         );
-//         "#,
-//     )?;
-//
-//     let id = insert_task(&conn, "ship v0")?;
-//     println!("Inserted task id={id}");
-//
-//     mark_done(&conn, "ship v0")?;
-//
-//     let maybe = get_task(&conn, "ship v0")?;
-//     println!("Task: {maybe:#?}");
-//
-//     Ok(())
-// }
-
-// fn insert_task(conn: &Connection, title: &str) -> Result<i64> {
-//     conn.execute(
-//         "INSERT OR IGNORE INTO tasks (title, done) VALUES (?1, 0)",
-//         params![title],
-//     )?;
-//
-//     // Return the id whether it was newly inserted or already existed
-//     let id: i64 = conn.query_row(
-//         "SELECT id FROM tasks WHERE title = ?1",
-//         params![title],
-//         |row| row.get(0),
-//     )?;
-//     Ok(id)
-// }
-//
-// fn mark_done(conn: &Connection, title: &str) -> Result<()> {
-//     conn.execute("UPDATE tasks SET done = 1 WHERE title = ?1", params![title])?;
-//     Ok(())
-// }
-//
-// fn get_task(conn: &Connection, title: &str) -> Result<Option<Task>> {
-//     conn.query_row(
-//         "SELECT id, title, done FROM tasks WHERE title = ?1",
-//         params![title],
-//         |row| {
-//             let done_i: i64 = row.get(2)?;
-//             Ok(Task {
-//                 id: row.get(0)?,
-//                 title: row.get(1)?,
-//                 done: done_i != 0,
-//             })
-//         },
-//     )
-//     .optional()
-//     .map_err(Into::into)
-// }
 
 #[cfg(test)]
 mod tests {
@@ -219,6 +196,12 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let mut repo = Repository::new(conn).unwrap();
         let r = repo.add_project("Project1").unwrap();
+        repo.add_project("admin").unwrap();
+        repo.add_project("dev").unwrap();
+        repo.add_project("ref").unwrap();
+        repo.add_project("ai").unwrap();
+        repo.add_project("chat").unwrap();
+        repo.add_project("share").unwrap();
 
         let project = repo.get_project_by_id(r).unwrap();
         assert_eq!(project.name, "Project1");
@@ -226,29 +209,31 @@ mod tests {
         let active_view = repo.get_active_view_for_project(&project).unwrap();
         assert_eq!(active_view.name, "view");
 
-        let window_manager_id = repo.get_window_manager_id(&active_view).unwrap();
-        assert_eq!(window_manager_id, "1#Project1#view");
+        let mut window_manager_id = repo.get_window_manager_display_name(&active_view).unwrap();
+        assert_eq!(window_manager_id, "Project1#view");
 
-        // let mut project = Project::new("Project 1")
-        //     .add_new_view("1", "View 1")
-        //     .add_new_view("2", "View 2");
-        // model.add_project(project);
-        //
-        // project = Project::new("Project 2");
-        // project.add_view(View::new("3", "View 3"));
-        // project.add_view(View::new("4", "View 4"));
-        // model.add_project(project);
-        //
-        // assert_eq!(model.active, None);
-        //
-        // let v = model.find_view("Project 1", "View 1");
-        // assert_eq!(v.unwrap().id, "1");
-        // assert_eq!(v.unwrap().name, "View 1");
-        //
-        // model.set_active_project(model.find_project("Project 1").unwrap().clone());
-        // assert_eq!(model.active.as_ref().unwrap().name, "Project 1");
-        //
-        // let v = model.find_view("Not Found", "Tag 1");
-        // assert_eq!(v, None);
+        let mut goto_view = repo.get_view_for_pin_key("a").unwrap();
+        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
+        assert_eq!(window_manager_id, "chat#view");
+
+        goto_view = repo.get_view_for_pin_key("s").unwrap();
+        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
+        assert_eq!(window_manager_id, "ai#view");
+
+        goto_view = repo.get_view_for_pin_key("d").unwrap();
+        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
+        assert_eq!(window_manager_id, "ref#view");
+
+        goto_view = repo.get_view_for_pin_key("f").unwrap();
+        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
+        assert_eq!(window_manager_id, "dev#view");
+
+        goto_view = repo.get_view_for_pin_key("g").unwrap();
+        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
+        assert_eq!(window_manager_id, "admin#view");
+
+        goto_view = repo.get_view_for_pin_key("`").unwrap();
+        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
+        assert_eq!(window_manager_id, "share#view");
     }
 }

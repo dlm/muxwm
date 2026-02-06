@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -28,19 +27,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// does testing things
-    Test {
-        /// lists test values
-        #[arg(short, long)]
-        list: bool,
-    },
-
-    /// does running things
-    Run {
-        #[arg(short, long)]
-        jump: bool,
-    },
-
     /// perform operations on the pin objects
     Pin {
         #[command(subcommand)]
@@ -50,27 +36,11 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum PinCommands {
-    /// set the focus on the current screen to the specified tag
+    /// set the focus on the current screen to the specified view
     Focus {
-        /// the name of the pin on which to focus
-        name: String,
+        /// the pin key of the view on which to focus
+        key: String,
     },
-}
-
-fn test(list: bool) {
-    if list {
-        println!("Printing testing lists...");
-    } else {
-        println!("Not printing testing lists...");
-    }
-}
-
-fn run(jump: bool) {
-    if jump {
-        println!("Jumping...");
-    } else {
-        println!("Not jumping...");
-    }
 }
 
 struct WindowManager {
@@ -96,24 +66,6 @@ fn main() {
     let cli = Cli::parse();
     let mut i3 = WindowManager::new();
 
-    let pins = HashMap::from([
-        ("0".to_string(), "0.open".to_string()),
-        ("1".to_string(), "1.open".to_string()),
-        ("2".to_string(), "2.open".to_string()),
-        ("3".to_string(), "3.open".to_string()),
-        ("4".to_string(), "4.open".to_string()),
-        ("5".to_string(), "5.open".to_string()),
-        ("6".to_string(), "6.open".to_string()),
-        ("7".to_string(), "7.open".to_string()),
-        ("8".to_string(), "8.open".to_string()),
-        ("9".to_string(), "9.open".to_string()),
-        ("g".to_string(), "1.admin".to_string()),
-        ("f".to_string(), "4.dev".to_string()),
-        ("d".to_string(), "7.ref".to_string()),
-        ("s".to_string(), "3.ai".to_string()),
-        ("a".to_string(), "8.chat".to_string()),
-    ]);
-
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
         println!("Value for name: {name}");
@@ -133,40 +85,23 @@ fn main() {
     }
 
     let conn = Connection::open_in_memory().unwrap();
-    let repo = Repository::new(conn);
-    let _ = repo;
-    // let mut project = Project::new("Project 1")
-    //     .add_new_view("1", "View 1")
-    //     .add_new_view("2", "View 2");
-    // model.add_project(project);
-    //
-    // project = Project::new("Project 2");
-    // project.add_view(View::new("3", "View 3"));
-    // project.add_view(View::new("4", "View 4"));
-    // model.add_project(project.clone());
-    //
-    // model.set_active_project(project);
-    //
-    // let v = model.find_view("Not Found", "Tag 1");
+    let mut repo = Repository::new(conn).unwrap();
+    repo.add_project("admin").unwrap();
+    repo.add_project("dev").unwrap();
+    repo.add_project("ref").unwrap();
+    repo.add_project("ai").unwrap();
+    repo.add_project("chat").unwrap();
+    repo.add_project("share").unwrap();
 
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level cmd
     match &cli.command {
-        Some(Commands::Test { list }) => {
-            test(*list);
-        }
-        Some(Commands::Run { jump }) => {
-            run(*jump);
-        }
         Some(Commands::Pin { command }) => match command {
-            PinCommands::Focus { name } => {
-                let workspace = pins.get(name).expect("No such pin");
-                i3.focus(&workspace);
+            PinCommands::Focus { key } => {
+                let view = repo.get_view_for_pin_key(key).unwrap();
+                let display_name = repo.get_window_manager_display_name(&view).unwrap();
+                i3.focus(&display_name);
             }
         },
 
         None => {}
     }
-
-    // Continued program logic goes here...
 }
