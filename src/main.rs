@@ -32,6 +32,11 @@ enum Commands {
         #[command(subcommand)]
         command: PinCommands,
     },
+
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -40,6 +45,15 @@ enum PinCommands {
     Focus {
         /// the pin key of the view on which to focus
         key: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProjectCommands {
+    /// add a new project
+    Add {
+        /// the name of the project
+        name: String,
     },
 }
 
@@ -84,19 +98,26 @@ fn main() {
         _ => println!("Don't be crazy"),
     }
 
-    let conn = Connection::open_in_memory().unwrap();
+    let home = std::env::var("HOME").unwrap();
+    let db_path = PathBuf::from(home).join(".local/share/muxwm/muxwm.db");
+    let conn = Connection::open(db_path).unwrap();
     let mut repo = Repository::new(conn).unwrap();
-    repo.add_project("admin").unwrap();
-    repo.add_project("dev").unwrap();
-    repo.add_project("ref").unwrap();
-    repo.add_project("ai").unwrap();
-    repo.add_project("chat").unwrap();
-    repo.add_project("share").unwrap();
 
     match &cli.command {
         Some(Commands::Pin { command }) => match command {
             PinCommands::Focus { key } => {
                 let view = repo.get_view_for_pin_key(key).unwrap();
+                let display_name = repo.get_window_manager_display_name(&view).unwrap();
+                i3.focus(&display_name);
+            }
+        },
+
+        Some(Commands::Project { command }) => match command {
+            ProjectCommands::Add { name } => {
+                let id = repo.add_project(&name).unwrap();
+                println!("Added project with id: {}", id);
+                let proj = repo.get_project_by_id(id).unwrap();
+                let view = repo.get_active_view_for_project(&proj).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 i3.focus(&display_name);
             }

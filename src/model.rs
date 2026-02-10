@@ -12,9 +12,9 @@ pub struct View {
 
 #[derive(Debug)]
 pub struct Project {
+    active_view_id: i64,
     id: i64,
     name: String,
-    active_view_id: i64,
 }
 
 pub struct Repository {
