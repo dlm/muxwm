@@ -46,6 +46,18 @@ enum PinCommands {
         /// the pin key of the view on which to focus
         key: String,
     },
+
+    /// set the pin to the currently focused view
+    Set {
+        /// the pin key of the view on which to focus
+        key: String,
+    },
+
+    /// clear the pin
+    Clear {
+        /// the pin key of the view on which to focus
+        key: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -73,6 +85,18 @@ impl WindowManager {
         self.connection
             .run_command(&cmd)
             .expect("Failed to run `workspace` command");
+    }
+
+    fn get_active_workspace_name(&mut self) -> Option<String> {
+        let result = self
+            .connection
+            .get_workspaces()
+            .expect("Failed to run `workspace` command");
+        result
+            .workspaces
+            .iter()
+            .find(|w| w.focused)
+            .map(|w| w.name.clone())
     }
 }
 
@@ -110,12 +134,23 @@ fn main() {
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 i3.focus(&display_name);
             }
+
+            PinCommands::Set { key } => {
+                let name = i3.get_active_workspace_name().unwrap();
+                let view = repo
+                    .get_view_from_window_manager_display_name(&name)
+                    .unwrap();
+                repo.upsert_pin(key, &view).unwrap();
+            }
+
+            PinCommands::Clear { key } => {
+                repo.clear_pin(&key).unwrap();
+            }
         },
 
         Some(Commands::Project { command }) => match command {
             ProjectCommands::Add { name } => {
                 let id = repo.add_project(&name).unwrap();
-                println!("Added project with id: {}", id);
                 let proj = repo.get_project_by_id(id).unwrap();
                 let view = repo.get_active_view_for_project(&proj).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
@@ -124,5 +159,17 @@ fn main() {
         },
 
         None => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WindowManager;
+
+    #[test]
+    fn playground() {
+        let mut i3 = WindowManager::new();
+        let v = i3.get_active_workspace_name().unwrap();
+        assert_eq!(v, "dev#view");
     }
 }

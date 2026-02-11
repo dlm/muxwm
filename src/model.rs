@@ -20,7 +20,6 @@ pub struct Project {
 pub struct Repository {
     conn: Connection,
     default_view_name: String,
-    pins: HashMap<String, String>,
 }
 
 impl Repository {
@@ -46,32 +45,20 @@ impl Repository {
 
                 FOREIGN KEY(active_view_id) REFERENCES views(id) DEFERRABLE INITIALLY DEFERRED
             );
+
+            CREATE TABLE IF NOT EXISTS pins (
+                id    INTEGER PRIMARY KEY,
+                key  TEXT NOT NULL UNIQUE,
+                view_id INTEGER not null,
+
+                FOREIGN KEY(view_id) REFERENCES views(id)
+            );
             "#,
         )?;
 
         Ok(Self {
             conn: conn,
             default_view_name: "view".to_string(),
-            pins: HashMap::from([
-                // pre-defined pins
-                ("g".to_string(), "admin#view".to_string()),
-                ("f".to_string(), "dev#view".to_string()),
-                ("d".to_string(), "ref#view".to_string()),
-                ("s".to_string(), "ai#view".to_string()),
-                ("a".to_string(), "chat#view".to_string()),
-                ("`".to_string(), "share#view".to_string()),
-                // user-defined pins
-                ("0".to_string(), "0.open".to_string()),
-                ("1".to_string(), "1.open".to_string()),
-                ("2".to_string(), "2.open".to_string()),
-                ("3".to_string(), "3.open".to_string()),
-                ("4".to_string(), "4.open".to_string()),
-                ("5".to_string(), "5.open".to_string()),
-                ("6".to_string(), "6.open".to_string()),
-                ("7".to_string(), "7.open".to_string()),
-                ("8".to_string(), "8.open".to_string()),
-                ("9".to_string(), "9.open".to_string()),
-            ]),
         })
     }
 
@@ -166,23 +153,62 @@ impl Repository {
         Some(format!("{}#{}", project_name, view.name))
     }
 
-    pub fn get_view_for_pin_key(&self, key: &str) -> Option<View> {
-        // this is a pretty big hack but should improve once we implement
-        // the pin table
-        let display_name_hack = self.pins.get(key)?;
-        let parts = display_name_hack.split("#").collect::<Vec<&str>>();
+    pub fn get_view_from_window_manager_display_name(&self, name: &str) -> Option<View> {
+        let parts = name.split("#").collect::<Vec<&str>>();
         if parts.len() != 2 {
             return None;
         }
 
         let project_name = parts[0];
         let view_name = parts[1];
-        let project = self.get_project_by_name(project_name)?;
-        let view = self.get_active_view_for_project(&project)?;
-        if view.name != view_name {
-            return None;
-        }
-        Some(view)
+        self.conn.query_row(
+            "SELECT views.id, views.name, views.project_id FROM projects JOIN views ON projects.id = views.project_id WHERE projects.name = ?1 and views.name = ?2",
+            params![project_name, view_name],
+            |row| {
+                Ok(View {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        project_id: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .ok()?
+    }
+
+    pub fn upsert_pin(&mut self, key: &str, view: &View) -> Result<i64> {
+        // upsert the pin
+        self.conn.execute(
+            "INSERT INTO pins (key, view_id) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET view_id = ?2",
+            params![key, view.id],
+        )?;
+        let pin_id: i64 = self.conn.last_insert_rowid();
+
+        Ok(pin_id)
+    }
+
+    pub fn clear_pin(&mut self, key: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM pins WHERE key = ?1", params![key])
+            .optional()?;
+        Ok(())
+    }
+
+    pub fn get_view_for_pin_key(&self, key: &str) -> Option<View> {
+        self.conn
+            .query_row(
+            "SELECT views.id, views.name, views.project_id FROM views JOIN pins ON views.id = pins.view_id WHERE pins.key = ?1",
+            params![key],
+            |row| {
+                Ok(View {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        project_id: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .ok()?
     }
 }
 
@@ -195,45 +221,20 @@ mod tests {
     fn playground() {
         let conn = Connection::open_in_memory().unwrap();
         let mut repo = Repository::new(conn).unwrap();
-        let r = repo.add_project("Project1").unwrap();
-        repo.add_project("admin").unwrap();
-        repo.add_project("dev").unwrap();
-        repo.add_project("ref").unwrap();
-        repo.add_project("ai").unwrap();
-        repo.add_project("chat").unwrap();
-        repo.add_project("share").unwrap();
 
+        let r = repo.add_project("proj1").unwrap();
         let project = repo.get_project_by_id(r).unwrap();
-        assert_eq!(project.name, "Project1");
-
         let active_view = repo.get_active_view_for_project(&project).unwrap();
-        assert_eq!(active_view.name, "view");
-
         let mut window_manager_id = repo.get_window_manager_display_name(&active_view).unwrap();
-        assert_eq!(window_manager_id, "Project1#view");
-
-        let mut goto_view = repo.get_view_for_pin_key("a").unwrap();
+        assert_eq!(window_manager_id, "proj1#view");
+        repo.upsert_pin("g", &active_view).unwrap();
+        let goto_view = repo.get_view_for_pin_key("g").unwrap();
         window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
-        assert_eq!(window_manager_id, "chat#view");
+        assert_eq!(window_manager_id, "proj1#view");
 
-        goto_view = repo.get_view_for_pin_key("s").unwrap();
-        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
-        assert_eq!(window_manager_id, "ai#view");
-
-        goto_view = repo.get_view_for_pin_key("d").unwrap();
-        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
-        assert_eq!(window_manager_id, "ref#view");
-
-        goto_view = repo.get_view_for_pin_key("f").unwrap();
-        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
-        assert_eq!(window_manager_id, "dev#view");
-
-        goto_view = repo.get_view_for_pin_key("g").unwrap();
-        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
-        assert_eq!(window_manager_id, "admin#view");
-
-        goto_view = repo.get_view_for_pin_key("`").unwrap();
-        window_manager_id = repo.get_window_manager_display_name(&goto_view).unwrap();
-        assert_eq!(window_manager_id, "share#view");
+        let view = repo
+            .get_view_from_window_manager_display_name("proj1#view")
+            .unwrap();
+        assert_eq!(view.id, active_view.id);
     }
 }
