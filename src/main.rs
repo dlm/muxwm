@@ -67,6 +67,15 @@ enum ProjectCommands {
         /// the name of the project
         name: String,
     },
+
+    /// list all projects
+    List,
+
+    /// focus on the project's active view
+    Focus {
+        /// the name of the project
+        name: String,
+    },
 }
 
 struct WindowManager {
@@ -152,6 +161,20 @@ fn main() {
             ProjectCommands::Add { name } => {
                 let id = repo.add_project(&name).unwrap();
                 let proj = repo.get_project_by_id(id).unwrap();
+                let view = repo.get_active_view_for_project(&proj).unwrap();
+                let display_name = repo.get_window_manager_display_name(&view).unwrap();
+                i3.focus(&display_name);
+            }
+
+            ProjectCommands::List => {
+                let projects = repo.list_projects().unwrap();
+                for proj in projects {
+                    println!("{}", proj.name());
+                }
+            }
+
+            ProjectCommands::Focus { name } => {
+                let proj = repo.get_project_by_name(&name).unwrap();
                 let view = repo.get_active_view_for_project(&proj).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 i3.focus(&display_name);

@@ -15,6 +15,12 @@ pub struct Project {
     name: String,
 }
 
+impl Project {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 pub struct Repository {
     conn: Connection,
     default_view_name: String,
@@ -86,6 +92,21 @@ impl Repository {
         tx.commit()?;
 
         Ok(project_id)
+    }
+
+    pub fn list_projects(&self) -> Result<Vec<Project>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, active_view_id FROM projects ORDER BY id")?;
+        let projects = stmt.query_map([], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                active_view_id: row.get(2)?,
+            })
+        })?;
+
+        projects.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
     pub fn get_project_by_id(&self, id: i64) -> Option<Project> {
@@ -234,5 +255,14 @@ mod tests {
             .get_view_from_window_manager_display_name("proj1#view")
             .unwrap();
         assert_eq!(view.id, active_view.id);
+
+        // create a second project
+        repo.add_project("proj2").unwrap();
+
+        // and list them
+        let projects = repo.list_projects().unwrap();
+        assert_eq!(projects.len(), 2);
+        assert_eq!(projects[0].name, "proj1");
+        assert_eq!(projects[1].name, "proj2");
     }
 }
