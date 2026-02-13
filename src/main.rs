@@ -184,15 +184,3 @@ fn main() {
         None => {}
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::WindowManager;
-
-    #[test]
-    fn playground() {
-        let mut i3 = WindowManager::new();
-        let v = i3.get_active_workspace_name().unwrap();
-        assert_eq!(v, "dev#view");
-    }
-}
