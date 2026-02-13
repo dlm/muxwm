@@ -69,7 +69,12 @@ enum ProjectCommands {
     },
 
     /// list all projects
-    List,
+    List {
+        /// show the pins for each project
+        /// (default: false)
+        #[arg(long)]
+        with_pins: bool,
+    },
 
     /// focus on the project's active view
     Focus {
@@ -166,10 +171,18 @@ fn main() {
                 i3.focus(&display_name);
             }
 
-            ProjectCommands::List => {
+            ProjectCommands::List { with_pins } => {
                 let projects = repo.list_projects().unwrap();
                 for proj in projects {
-                    println!("{}", proj.name());
+                    let mut pin_key = String::new();
+                    if *with_pins {
+                        let active_view = repo.get_active_view_for_project(&proj).unwrap();
+                        pin_key = repo
+                            .get_pin_key_for_view(&active_view)
+                            .unwrap_or("".to_string());
+                    }
+
+                    println!("{}\t{}", proj.name(), pin_key);
                 }
             }
 

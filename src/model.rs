@@ -229,6 +229,17 @@ impl Repository {
             .optional()
             .ok()?
     }
+
+    pub fn get_pin_key_for_view(&self, view: &View) -> Option<String> {
+        self.conn
+            .query_row(
+                "SELECT key FROM pins WHERE view_id = ?1",
+                params![view.id],
+                |row| Ok(row.get(0)?),
+            )
+            .optional()
+            .ok()?
+    }
 }
 
 #[cfg(test)]
