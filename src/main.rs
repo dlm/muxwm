@@ -33,6 +33,7 @@ enum Commands {
         command: PinCommands,
     },
 
+    /// perform operations on the project objects
     Project {
         #[command(subcommand)]
         command: ProjectCommands,
