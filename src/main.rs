@@ -38,6 +38,12 @@ enum Commands {
         #[command(subcommand)]
         command: ProjectCommands,
     },
+
+    /// perform operations on the view objects
+    View {
+        #[command(subcommand)]
+        command: ViewCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -84,6 +90,24 @@ enum ProjectCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum ViewCommands {
+    /// list all views
+    List {
+        /// show the pins for each view
+        /// (default: false)
+        #[arg(long)]
+        with_pins: bool,
+
+        /// show all the views, even those that are managed by muxwm, for example, in i3, that
+        /// would be all the workspaces managed by the window manager
+        ///
+        /// (default: false)
+        #[arg(long)]
+        with_unmanaged: bool,
+    },
+}
+
 struct WindowManager {
     connection: I3Connection,
 }
@@ -112,6 +136,14 @@ impl WindowManager {
             .iter()
             .find(|w| w.focused)
             .map(|w| w.name.clone())
+    }
+
+    fn get_workspace_names(&mut self) -> Vec<String> {
+        let result = self
+            .connection
+            .get_workspaces()
+            .expect("Failed to run `workspace` command");
+        result.workspaces.iter().map(|w| w.name.clone()).collect()
     }
 }
 
@@ -192,6 +224,31 @@ fn main() {
                 let view = repo.get_active_view_for_project(&proj).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 i3.focus(&display_name);
+            }
+        },
+
+        Some(Commands::View { command }) => match command {
+            ViewCommands::List {
+                with_pins,
+                with_unmanaged,
+            } => {
+                if !with_unmanaged {
+                    eprintln!("printing only the managed workspaces is not yet supported");
+                    std::process::exit(1);
+                }
+
+                let view_names = i3.get_workspace_names();
+                view_names.iter().for_each(|name| {
+                    let pin_key = if *with_pins {
+                        repo.get_view_from_window_manager_display_name(name)
+                            .and_then(|view| repo.get_pin_key_for_view(&view))
+                            .unwrap_or("".to_string())
+                    } else {
+                        String::new()
+                    };
+
+                    println!("{}\t{}", name, pin_key);
+                });
             }
         },
 
