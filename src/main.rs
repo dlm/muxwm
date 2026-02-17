@@ -22,7 +22,7 @@ struct Cli {
     debug: u8,
 
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
@@ -175,7 +175,7 @@ fn main() {
     let mut repo = Repository::new(conn).unwrap();
 
     match &cli.command {
-        Some(Commands::Pin { command }) => match command {
+        Commands::Pin { command } => match command {
             PinCommands::Focus { key } => {
                 let view = repo.get_view_for_pin_key(key).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
@@ -195,7 +195,7 @@ fn main() {
             }
         },
 
-        Some(Commands::Project { command }) => match command {
+        Commands::Project { command } => match command {
             ProjectCommands::Add { name } => {
                 let id = repo.add_project(&name).unwrap();
                 let proj = repo.get_project_by_id(id).unwrap();
@@ -227,7 +227,7 @@ fn main() {
             }
         },
 
-        Some(Commands::View { command }) => match command {
+        Commands::View { command } => match command {
             ViewCommands::List {
                 with_pins,
                 with_unmanaged,
@@ -251,7 +251,5 @@ fn main() {
                 });
             }
         },
-
-        None => {}
     }
 }
