@@ -88,6 +88,14 @@ enum ProjectCommands {
         /// the name of the project
         name: String,
     },
+
+    /// update the current active project's active view to the next view
+    /// in the view list
+    ActivateNextView {},
+
+    /// update the current active project's active view to the previous view
+    /// in the view list
+    ActivatePrevView {},
 }
 
 #[derive(Subcommand)]
@@ -105,6 +113,15 @@ enum ViewCommands {
         /// (default: false)
         #[arg(long)]
         with_unmanaged: bool,
+    },
+
+    /// add a new view
+    Add {
+        /// the name of the project
+        project_name: String,
+
+        /// the name of the view
+        view_name: String,
     },
 }
 
@@ -225,6 +242,28 @@ fn main() {
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 i3.focus(&display_name);
             }
+
+            ProjectCommands::ActivateNextView {} => {
+                let display_name = i3.get_active_workspace_name().unwrap();
+                let proj = repo
+                    .get_project_from_window_manager_display_name(&display_name)
+                    .unwrap();
+                let next = repo.get_next_view_for_project(&proj).unwrap();
+                let _ = repo.set_active_view_for_project(&proj, &next).unwrap();
+                let display_name = repo.get_window_manager_display_name(&next).unwrap();
+                i3.focus(&display_name);
+            }
+
+            ProjectCommands::ActivatePrevView {} => {
+                let display_name = i3.get_active_workspace_name().unwrap();
+                let proj = repo
+                    .get_project_from_window_manager_display_name(&display_name)
+                    .unwrap();
+                let prev = repo.get_prev_view_for_project(&proj).unwrap();
+                let _ = repo.set_active_view_for_project(&proj, &prev).unwrap();
+                let display_name = repo.get_window_manager_display_name(&prev).unwrap();
+                i3.focus(&display_name);
+            }
         },
 
         Commands::View { command } => match command {
@@ -249,6 +288,16 @@ fn main() {
 
                     println!("{}\t{}", name, pin_key);
                 });
+            }
+
+            ViewCommands::Add {
+                project_name,
+                view_name,
+            } => {
+                let proj = repo.get_project_by_name(&project_name).unwrap();
+                let view = repo.add_view_to_project(&proj, &view_name).unwrap();
+                let display_name = repo.get_window_manager_display_name(&view).unwrap();
+                println!("added view: {}", display_name);
             }
         },
     }

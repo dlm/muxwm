@@ -6,6 +6,7 @@ pub struct View {
     id: i64,
     name: String,
     project_id: i64,
+    position: i64,
 }
 
 #[derive(Debug)]
@@ -64,6 +65,24 @@ impl Repository {
             conn: conn,
             default_view_name: "view".to_string(),
         })
+    }
+
+    pub fn get_view_by_id(&self, id: i64) -> Option<View> {
+        self.conn
+            .query_row(
+                "SELECT id, name, project_id, position FROM views WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok(View {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        project_id: row.get(2)?,
+                        position: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .ok()?
     }
 
     pub fn add_project(&mut self, name: &str) -> Result<i64> {
@@ -146,18 +165,128 @@ impl Repository {
     pub fn get_active_view_for_project(&self, project: &Project) -> Option<View> {
         self.conn
             .query_row(
-                "SELECT id, name, project_id FROM views WHERE id = ?1",
+                "SELECT id, name, project_id, position FROM views WHERE id = ?1",
                 params![project.active_view_id],
                 |row| {
                     Ok(View {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         project_id: row.get(2)?,
+                        position: row.get(3)?,
                     })
                 },
             )
             .optional()
             .ok()?
+    }
+
+    pub fn add_view_to_project(&mut self, project: &Project, name: &str) -> Result<View> {
+        let tx = self.conn.transaction()?;
+
+        // get the largest position for a view in the project
+        // and increment it by one
+        tx.query_row(
+            "SELECT MAX(position) FROM views WHERE project_id = ?",
+            params![project.id],
+            |row| Ok(row.get::<_, i64>(0)?),
+        )
+        .and_then(|max_position| {
+            tx.execute(
+                "INSERT INTO views (name, project_id, position) VALUES (?1, ?2, ?3)",
+                params![name, project.id, max_position + 1],
+            )
+        })?;
+        let view_id: i64 = tx.last_insert_rowid();
+
+        tx.commit()?;
+
+        let view = self.get_view_by_id(view_id).unwrap();
+        self.set_active_view_for_project(project, &view);
+        Ok(view)
+    }
+
+    pub fn get_next_view_for_project(&self, project: &Project) -> Result<View> {
+        let active_view = self
+            .get_active_view_for_project(project)
+            .ok_or(anyhow::anyhow!("no active view"))?;
+
+        let next = self.conn.query_row(
+            "SELECT views.id, views.name, views.project_id, views.position FROM views WHERE project_id = ? AND position > ? ORDER BY views.position ASC LIMIT 1",
+            params![project.id, active_view.position],
+            |row| {
+                Ok(View {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    project_id: row.get(2)?,
+                    position: row.get(3)?,
+                })
+            },
+        ).optional()?;
+
+        if let Some(next) = next {
+            Ok(next)
+        } else {
+            self.conn.query_row(
+                "SELECT views.id, views.name, views.project_id, views.position FROM views WHERE project_id = ? ORDER BY views.position ASC LIMIT 1",
+                params![project.id],
+                |row| {
+                    Ok(View {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        project_id: row.get(2)?,
+                        position: row.get(3)?,
+                    })
+                },
+            ).optional()?.ok_or(anyhow::anyhow!("no next view"))
+        }
+    }
+
+    pub fn get_prev_view_for_project(&self, project: &Project) -> Result<View> {
+        let active_view = self
+            .get_active_view_for_project(project)
+            .ok_or(anyhow::anyhow!("no active view"))?;
+
+        let next = self.conn.query_row(
+            "SELECT views.id, views.name, views.project_id, views.position FROM views WHERE project_id = ? AND position < ? ORDER BY views.position DESC LIMIT 1",
+            params![project.id, active_view.position],
+            |row| {
+                Ok(View {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    project_id: row.get(2)?,
+                    position: row.get(3)?,
+                })
+            },
+        ).optional()?;
+
+        if let Some(next) = next {
+            Ok(next)
+        } else {
+            self.conn.query_row(
+                "SELECT views.id, views.name, views.project_id, views.position FROM views WHERE project_id = ? ORDER BY views.position DESC LIMIT 1",
+                params![project.id],
+                |row| {
+                    Ok(View {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        project_id: row.get(2)?,
+                        position: row.get(3)?,
+                    })
+                },
+            ).optional()?.ok_or(anyhow::anyhow!("no next view"))
+        }
+    }
+
+    pub fn set_active_view_for_project(&mut self, project: &Project, view: &View) -> Result<View> {
+        if view.project_id != project.id {
+            return Err(anyhow::anyhow!("view is not in the project"));
+        }
+
+        self.conn.execute(
+            "UPDATE projects SET active_view_id = ?1 WHERE id = ?2",
+            params![view.id, project.id],
+        )?;
+        Ok(view.clone())
     }
 
     pub fn get_window_manager_display_name(&self, view: &View) -> Option<String> {
@@ -172,6 +301,29 @@ impl Repository {
         Some(format!("{}#{}", project_name, view.name))
     }
 
+    pub fn get_project_from_window_manager_display_name(&self, name: &str) -> Option<Project> {
+        let parts = name.split("#").collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            return None;
+        }
+
+        let project_name = parts[0];
+        self.conn
+            .query_row(
+                "SELECT id, name, active_view_id FROM projects WHERE name = ?1",
+                params![project_name],
+                |row| {
+                    Ok(Project {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        active_view_id: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .ok()?
+    }
+
     pub fn get_view_from_window_manager_display_name(&self, name: &str) -> Option<View> {
         let parts = name.split("#").collect::<Vec<&str>>();
         if parts.len() != 2 {
@@ -181,13 +333,14 @@ impl Repository {
         let project_name = parts[0];
         let view_name = parts[1];
         self.conn.query_row(
-            "SELECT views.id, views.name, views.project_id FROM projects JOIN views ON projects.id = views.project_id WHERE projects.name = ?1 and views.name = ?2",
+            "SELECT views.id, views.name, views.project_id, views.position FROM projects JOIN views ON projects.id = views.project_id WHERE projects.name = ?1 and views.name = ?2",
             params![project_name, view_name],
             |row| {
                 Ok(View {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         project_id: row.get(2)?,
+                        position: row.get(3)?,
                     })
                 },
             )
@@ -223,6 +376,7 @@ impl Repository {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         project_id: row.get(2)?,
+                        position: row.get(3)?,
                     })
                 },
             )
