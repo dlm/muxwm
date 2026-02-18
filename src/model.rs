@@ -201,7 +201,7 @@ impl Repository {
         tx.commit()?;
 
         let view = self.get_view_by_id(view_id).unwrap();
-        self.set_active_view_for_project(project, &view);
+        let _ = self.set_active_view_for_project(project, &view);
         Ok(view)
     }
 
