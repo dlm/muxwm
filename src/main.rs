@@ -276,6 +276,8 @@ fn main() {
                     std::process::exit(1);
                 }
 
+                // BUGBUG: we are missing the views that are managed by mux but not in i3
+
                 let view_names = i3.get_workspace_names();
                 view_names.iter().for_each(|name| {
                     let pin_key = if *with_pins {
