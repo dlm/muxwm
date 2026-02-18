@@ -369,7 +369,7 @@ impl Repository {
     pub fn get_view_for_pin_key(&self, key: &str) -> Option<View> {
         self.conn
             .query_row(
-            "SELECT views.id, views.name, views.project_id FROM views JOIN pins ON views.id = pins.view_id WHERE pins.key = ?1",
+            "SELECT views.id, views.name, views.project_id, views.position FROM views JOIN pins ON views.id = pins.view_id WHERE pins.key = ?1",
             params![key],
             |row| {
                 Ok(View {
