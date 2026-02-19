@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -218,7 +219,7 @@ fn main() {
                 let proj = repo.get_project_by_id(id).unwrap();
                 let view = repo.get_active_view_for_project(&proj).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
-                i3.focus(&display_name);
+                println!("added project: {}", display_name);
             }
 
             ProjectCommands::List { with_pins } => {
@@ -276,10 +277,22 @@ fn main() {
                     std::process::exit(1);
                 }
 
-                // BUGBUG: we are missing the views that are managed by mux but not in i3
-
                 let view_names = i3.get_workspace_names();
-                view_names.iter().for_each(|name| {
+
+                let managed_view_names = repo
+                    .list_views()
+                    .unwrap()
+                    .iter()
+                    .map(|v| repo.get_window_manager_display_name(v).unwrap())
+                    .collect::<Vec<String>>();
+
+                let mut unique_names =
+                    HashSet::<String>::from_iter(view_names.into_iter().chain(managed_view_names))
+                        .into_iter()
+                        .collect::<Vec<String>>();
+                unique_names.sort();
+
+                unique_names.iter().for_each(|name| {
                     let pin_key = if *with_pins {
                         repo.get_view_from_window_manager_display_name(name)
                             .and_then(|view| repo.get_pin_key_for_view(&view))

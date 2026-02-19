@@ -180,6 +180,22 @@ impl Repository {
             .ok()?
     }
 
+    pub fn list_views(&self) -> Result<Vec<View>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, project_id, position FROM views ORDER BY id")?;
+        let views = stmt.query_map([], |row| {
+            Ok(View {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                project_id: row.get(2)?,
+                position: row.get(3)?,
+            })
+        })?;
+
+        views.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
     pub fn add_view_to_project(&mut self, project: &Project, name: &str) -> Result<View> {
         let tx = self.conn.transaction()?;
 
@@ -201,7 +217,6 @@ impl Repository {
         tx.commit()?;
 
         let view = self.get_view_by_id(view_id).unwrap();
-        let _ = self.set_active_view_for_project(project, &view);
         Ok(view)
     }
 
