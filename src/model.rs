@@ -184,7 +184,9 @@ impl Repository {
 
         tx.commit()?;
 
-        let view = self.get_view_by_id(view_id).unwrap();
+        let view = self
+            .get_view_by_id(view_id)
+            .ok_or(anyhow::anyhow!("view not found"))?;
         Ok(view)
     }
 
