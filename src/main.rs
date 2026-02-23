@@ -204,6 +204,7 @@ fn main() {
                 let name = i3.get_active_workspace_name().unwrap();
                 let view = repo
                     .get_view_from_window_manager_display_name(&name)
+                    .unwrap()
                     .unwrap();
                 repo.upsert_pin(key, &view).unwrap();
             }
@@ -215,8 +216,7 @@ fn main() {
 
         Commands::Project { command } => match command {
             ProjectCommands::Add { name } => {
-                let id = repo.add_project(&name).unwrap();
-                let proj = repo.get_project_by_id(id).unwrap();
+                let proj = repo.create_project(&name).unwrap();
                 let view = repo.get_active_view_for_project(&proj).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 println!("added project: {}", display_name);
@@ -248,9 +248,10 @@ fn main() {
                 let display_name = i3.get_active_workspace_name().unwrap();
                 let proj = repo
                     .get_project_from_window_manager_display_name(&display_name)
+                    .unwrap()
                     .unwrap();
                 let next = repo.get_next_view_for_project(&proj).unwrap();
-                let _ = repo.set_active_view_for_project(&proj, &next).unwrap();
+                repo.set_active_view_for_project(&proj, &next).unwrap();
                 let display_name = repo.get_window_manager_display_name(&next).unwrap();
                 i3.focus(&display_name);
             }
@@ -259,6 +260,7 @@ fn main() {
                 let display_name = i3.get_active_workspace_name().unwrap();
                 let proj = repo
                     .get_project_from_window_manager_display_name(&display_name)
+                    .unwrap()
                     .unwrap();
                 let prev = repo.get_prev_view_for_project(&proj).unwrap();
                 let _ = repo.set_active_view_for_project(&proj, &prev).unwrap();
@@ -295,6 +297,7 @@ fn main() {
                 unique_names.iter().for_each(|name| {
                     let pin_key = if *with_pins {
                         repo.get_view_from_window_manager_display_name(name)
+                            .unwrap()
                             .and_then(|view| repo.get_pin_key_for_view(&view))
                             .unwrap_or("".to_string())
                     } else {
@@ -310,7 +313,7 @@ fn main() {
                 view_name,
             } => {
                 let proj = repo.get_project_by_name(&project_name).unwrap();
-                let view = repo.add_view_to_project(&proj, &view_name).unwrap();
+                let view = repo.create_view_in_project(&proj, &view_name).unwrap();
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 println!("added view: {}", display_name);
             }
