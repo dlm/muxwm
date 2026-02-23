@@ -169,17 +169,7 @@ fn main() {
     let cli = Cli::parse();
     let mut i3 = WindowManager::new();
 
-    // You can check the value provided by positional arguments, or option arguments
-    if let Some(name) = cli.name.as_deref() {
-        eprintln!("Value for name: {name}");
-    }
-
-    if let Some(config_path) = cli.config.as_deref() {
-        eprintln!("Value for config: {}", config_path.display());
-    }
-
-    // You can see how many times a particular flag or argument occurred
-    // Note, only flags can have multiple occurrences
+    // Check how many times the debug flag occurred for verbosity
     match cli.debug {
         0 => eprintln!("Debug mode is off"),
         1 => eprintln!("Debug mode is kind of on"),
