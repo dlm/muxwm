@@ -97,6 +97,12 @@ enum ProjectCommands {
     /// update the current active project's active view to the previous view
     /// in the view list
     ActivatePrevView {},
+
+    /// add a new view to the current active project
+    AddView {
+        /// the name of the view
+        view_name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -114,15 +120,6 @@ enum ViewCommands {
         /// (default: false)
         #[arg(long)]
         with_unmanaged: bool,
-    },
-
-    /// add a new view
-    Add {
-        /// the name of the project
-        project_name: String,
-
-        /// the name of the view
-        view_name: String,
     },
 }
 
@@ -257,6 +254,17 @@ fn main() {
                 let display_name = repo.get_window_manager_display_name(&prev).unwrap();
                 i3.focus(&display_name);
             }
+
+            ProjectCommands::AddView { view_name } => {
+                let display_name = i3.get_active_workspace_name().unwrap();
+                let proj = repo
+                    .get_project_from_window_manager_display_name(&display_name)
+                    .unwrap()
+                    .unwrap();
+                let view = repo.create_view_in_project(&proj, &view_name).unwrap();
+                let display_name = repo.get_window_manager_display_name(&view).unwrap();
+                println!("added view: {}", display_name);
+            }
         },
 
         Commands::View { command } => match command {
@@ -296,16 +304,6 @@ fn main() {
 
                     println!("{}\t{}", name, pin_key);
                 });
-            }
-
-            ViewCommands::Add {
-                project_name,
-                view_name,
-            } => {
-                let proj = repo.get_project_by_name(&project_name).unwrap();
-                let view = repo.create_view_in_project(&proj, &view_name).unwrap();
-                let display_name = repo.get_window_manager_display_name(&view).unwrap();
-                println!("added view: {}", display_name);
             }
         },
     }
