@@ -59,6 +59,10 @@ enum PinCommands {
     Set {
         /// the pin key of the view on which to focus
         key: String,
+
+        /// if true, the pin will be a project pin
+        #[arg(long)]
+        project: bool,
     },
 
     /// clear the pin
@@ -66,6 +70,9 @@ enum PinCommands {
         /// the pin key of the view on which to focus
         key: String,
     },
+
+    /// list all pins
+    List {},
 }
 
 #[derive(Subcommand)]
@@ -187,17 +194,34 @@ fn main() {
                 i3.focus(&display_name);
             }
 
-            PinCommands::Set { key } => {
+            PinCommands::Set { key, project } => {
                 let name = i3.get_active_workspace_name().unwrap();
-                let view = repo
-                    .get_view_from_window_manager_display_name(&name)
-                    .unwrap()
-                    .unwrap();
-                repo.upsert_pin(key, &view).unwrap();
+                if *project {
+                    let proj = repo
+                        .get_project_from_window_manager_display_name(&name)
+                        .unwrap()
+                        .unwrap();
+                    repo.upsert_pin_for_project(key, &proj).unwrap();
+                } else {
+                    let view = repo
+                        .get_view_from_window_manager_display_name(&name)
+                        .unwrap()
+                        .unwrap();
+                    repo.upsert_pin_for_view(key, &view).unwrap();
+                }
             }
 
             PinCommands::Clear { key } => {
                 repo.clear_pin(&key).unwrap();
+            }
+
+            PinCommands::List {} => {
+                let pins = repo.list_pins().unwrap();
+                for pin in pins {
+                    let view = repo.get_view_for_pin_key(&pin.key()).unwrap();
+                    let view_name = repo.get_window_manager_display_name(&view).unwrap();
+                    println!("{}\t{}\t{}", pin.key(), pin.pin_type(), view_name);
+                }
             }
         },
 
@@ -214,9 +238,8 @@ fn main() {
                 for proj in projects {
                     let mut pin_key = String::new();
                     if *with_pins {
-                        let active_view = repo.get_active_view_for_project(&proj).unwrap();
                         pin_key = repo
-                            .get_pin_key_for_view(&active_view)
+                            .get_pin_key_for_project(&proj)
                             .unwrap_or("".to_string());
                     }
 
