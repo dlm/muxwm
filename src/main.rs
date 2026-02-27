@@ -182,7 +182,7 @@ fn main() {
     }
 
     let home = std::env::var("HOME").unwrap();
-    let db_path = PathBuf::from(home).join(".local/share/muxwm/muxwm.db");
+    let db_path = PathBuf::from(home).join(".local/share/muxwm/muxwm-dev.db");
     let conn = Connection::open(db_path).unwrap();
     let mut repo = Repository::new(conn).unwrap();
 
