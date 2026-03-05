@@ -295,38 +295,36 @@ fn main() {
                 with_pins,
                 with_unmanaged,
             } => {
-                if !with_unmanaged {
-                    eprintln!("printing only the managed workspaces is not yet supported");
-                    std::process::exit(1);
-                }
-
-                let view_names = i3.get_workspace_names();
-
-                let managed_view_names = repo
+                let view_names = repo
                     .list_views()
                     .unwrap()
                     .iter()
                     .map(|v| repo.get_window_manager_display_name(v).unwrap())
                     .collect::<Vec<String>>();
 
-                let mut unique_names =
-                    HashSet::<String>::from_iter(view_names.into_iter().chain(managed_view_names))
+                let mut unique_names = if *with_unmanaged {
+                    let i3_view_names = i3.get_workspace_names();
+                    HashSet::<String>::from_iter(view_names.into_iter().chain(i3_view_names))
                         .into_iter()
-                        .collect::<Vec<String>>();
+                        .collect::<Vec<String>>()
+                } else {
+                    view_names
+                };
+
                 unique_names.sort();
 
-                unique_names.iter().for_each(|name| {
+                for name in &unique_names {
                     let pin_key = if *with_pins {
                         repo.get_view_from_window_manager_display_name(name)
                             .unwrap()
                             .and_then(|view| repo.get_pin_key_for_view(&view))
-                            .unwrap_or("".to_string())
+                            .unwrap_or_default()
                     } else {
                         String::new()
                     };
 
                     println!("{}\t{}", name, pin_key);
-                });
+                }
             }
         },
     }
