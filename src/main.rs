@@ -99,11 +99,11 @@ enum ProjectCommands {
     },
 
     /// update the current active project's active view to the next view
-    /// in the view list
+    /// in the view list and focus it
     ActivateNextView {},
 
     /// update the current active project's active view to the previous view
-    /// in the view list
+    /// in the view list and focus it
     ActivatePrevView {},
 
     /// add a new view to the current active project
@@ -159,7 +159,7 @@ impl WindowManager {
         let result = self
             .connection
             .get_workspaces()
-            .expect("Failed to run `workspace` command");
+            .expect("Failed to run `get_workspaces` command");
         result
             .workspaces
             .iter()
@@ -171,7 +171,7 @@ impl WindowManager {
         let result = self
             .connection
             .get_workspaces()
-            .expect("Failed to run `workspace` command");
+            .expect("Failed to run `get_workspace` command");
         result.workspaces.iter().map(|w| w.name.clone()).collect()
     }
 
