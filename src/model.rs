@@ -286,6 +286,21 @@ impl Repository {
             .ok()?
     }
 
+    pub fn rename_view(&self, view: &View, new_name: &str) -> Result<View> {
+        Ok(self.conn.query_row(
+            "UPDATE views SET name = ? WHERE id = ? RETURNING id, name, project_id, position",
+            params![new_name, view.id],
+            |row| {
+                Ok(View {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    project_id: row.get(2)?,
+                    position: row.get(3)?,
+                })
+            },
+        )?)
+    }
+
     pub fn list_views(&self) -> Result<Vec<View>> {
         let mut stmt = self
             .conn
@@ -786,6 +801,54 @@ mod tests {
 
         let view = repo.get_view_by_id(1);
         assert!(view.is_none());
+    }
+
+    #[test]
+    fn test_rename_view_when_view_is_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let proj1 = repo.create_project("proj1").unwrap();
+        let view = repo.get_active_view_for_project(&proj1).unwrap();
+
+        let new_name = "new_view_name";
+        assert!(repo.rename_view(&view, new_name).is_ok());
+
+        let view = repo.get_view_by_id(view.id).unwrap();
+        assert_eq!(view.name, new_name);
+    }
+
+    #[test]
+    fn test_rename_view_when_view_is_not_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let repo = Repository::new(conn).unwrap();
+
+        let view = View {
+            id: 1,
+            name: "view1".to_string(),
+            project_id: 1,
+            position: 1,
+        };
+
+        let new_name = "new_view_name";
+        assert!(repo.rename_view(&view, new_name).is_err());
+    }
+
+    #[test]
+    fn test_rename_view_when_new_name_already_exists() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let proj1 = repo.create_project("proj1").unwrap();
+        let view = repo.get_active_view_for_project(&proj1).unwrap();
+
+        // crate another view in the project with a different name
+        let other_name = "view1";
+        repo.create_view_in_project(&proj1, other_name).unwrap();
+
+        // now try to rename the active view to the name of the view
+        // that we just created
+        assert!(repo.rename_view(&view, other_name).is_err());
     }
 
     #[test]

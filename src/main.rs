@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use i3ipc::I3Connection;
 
@@ -128,6 +129,12 @@ enum ViewCommands {
         #[arg(long)]
         with_unmanaged: bool,
     },
+
+    // rename the currently active view
+    Rename {
+        /// the new name of the view
+        new_name: String,
+    },
 }
 
 struct WindowManager {
@@ -166,6 +173,12 @@ impl WindowManager {
             .get_workspaces()
             .expect("Failed to run `workspace` command");
         result.workspaces.iter().map(|w| w.name.clone()).collect()
+    }
+
+    fn rename_workspace(&mut self, old_name: &str, new_name: &str) -> Result<()> {
+        let cmd = format!("rename workspace \"{}\" to \"{}\"", old_name, new_name);
+        self.connection.run_command(&cmd)?;
+        Ok(())
     }
 }
 
@@ -291,6 +304,19 @@ fn main() {
         },
 
         Commands::View { command } => match command {
+            ViewCommands::Rename { new_name } => {
+                let old_display_name = i3.get_active_workspace_name().unwrap();
+                let view = repo
+                    .get_view_from_window_manager_display_name(&old_display_name)
+                    .unwrap()
+                    .unwrap();
+                let updated_view = repo.rename_view(&view, &new_name).unwrap();
+                let new_display_name = repo.get_window_manager_display_name(&updated_view).unwrap();
+                let _ = i3
+                    .rename_workspace(&old_display_name, &new_display_name)
+                    .unwrap();
+            }
+
             ViewCommands::List {
                 with_pins,
                 with_unmanaged,
