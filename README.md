@@ -37,11 +37,6 @@ there be anything else?  If so a config file would be a good option, else,
 something like and env var would be sufficient and env var would be sufficient.
 Note that the "better" error handling would also likely use some config.
 
-- Currently, in the `view list` command, we terminate unless we are running
-unmanaged, add in the managed version.
-
-- A `pin list` command would be nice.
-
 - Currently, we have a debug mode but we don't really use it.  Either remove it
 or actually use it.  Some ways that could be useful and a good learning
 experience would be to add some logging so that I get to explore the logging
@@ -51,7 +46,7 @@ tooling in the rust world.
 
 - on commands that take names, (add project and add view), it could be nice to
 add a little "validation" to the names so that we check that names do not
-contain `#`.  As the only user of this tool, I don't think it's a big deal, but
+contain `#` or a `:`.  As the only user of this tool, I don't think it's a big deal, but
 I could imagine that I could fat finger a name and then it would be a pain to
 fix.
 
