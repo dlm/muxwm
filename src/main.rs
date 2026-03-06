@@ -304,6 +304,19 @@ fn main() {
                 let display_name = repo.get_window_manager_display_name(&view).unwrap();
                 println!("added view: {}", display_name);
             }
+
+            ProjectCommands::ListViews {} => {
+                let display_name = i3.get_active_workspace_name().unwrap();
+                let proj = repo
+                    .get_project_from_window_manager_display_name(&display_name)
+                    .unwrap()
+                    .unwrap();
+                let views = repo.list_views_for_project(&proj).unwrap();
+                for view in views {
+                    let display_name = repo.get_window_manager_display_name(&view).unwrap();
+                    println!("{}", display_name);
+                }
+            }
         },
 
         Commands::View { command } => match command {
