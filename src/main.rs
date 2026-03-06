@@ -345,7 +345,7 @@ fn main() {
                 for name in &unique_names {
                     let pin_key = if *with_pins {
                         repo.get_view_from_window_manager_display_name(name)
-                            .unwrap()
+                            .unwrap_or_default()
                             .and_then(|view| repo.get_pin_key_for_view(&view))
                             .unwrap_or_default()
                     } else {
