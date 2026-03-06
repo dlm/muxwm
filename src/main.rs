@@ -111,6 +111,9 @@ enum ProjectCommands {
         /// the name of the view
         view_name: String,
     },
+
+    /// list all views for the current active project
+    ListViews {},
 }
 
 #[derive(Subcommand)]

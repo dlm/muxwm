@@ -211,6 +211,27 @@ impl Repository {
             .ok()?
     }
 
+    pub fn list_views_for_project(&self, project: &Project) -> Result<Vec<View>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, project_id, position FROM views WHERE project_id = ?1 ORDER BY position ASC")?;
+        let views = stmt.query_map(params![project.id], |row| {
+            Ok(View {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                project_id: row.get(2)?,
+                position: row.get(3)?,
+            })
+        })?;
+
+        let v = views.collect::<Result<Vec<_>, _>>()?;
+        if v.is_empty() {
+            Err(anyhow::anyhow!("invalid state: project has no views"))
+        } else {
+            Ok(v)
+        }
+    }
+
     pub fn get_active_view_for_project(&self, project: &Project) -> Option<View> {
         self.conn
             .query_row(
@@ -660,6 +681,37 @@ mod tests {
 
         let project = repo.get_project_by_name("not-found");
         assert!(project.is_none());
+    }
+
+    #[test]
+    fn test_list_views_for_project_when_views_are_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let proj1 = repo.create_project("proj1").unwrap();
+        let proj1_view0 = repo.get_active_view_for_project(&proj1).unwrap();
+        let proj1_view1 = repo.create_view_in_project(&proj1, "view1").unwrap();
+        let proj1_view2 = repo.create_view_in_project(&proj1, "view2").unwrap();
+
+        let views = repo.list_views_for_project(&proj1).unwrap();
+        assert_eq!(views.len(), 3);
+        assert_eq!(views[0], proj1_view0);
+        assert_eq!(views[1], proj1_view1);
+        assert_eq!(views[2], proj1_view2);
+    }
+
+    #[test]
+    fn test_list_views_for_project_when_views_are_not_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let repo = Repository::new(conn).unwrap();
+
+        let project = Project {
+            id: 1,
+            name: "proj1".to_string(),
+            active_view_id: 1,
+        };
+
+        assert!(repo.list_views_for_project(&project).is_err());
     }
 
     #[test]
