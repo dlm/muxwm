@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::{
     Connection, OptionalExtension, params,
     types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef},
@@ -11,6 +11,12 @@ pub struct View {
     name: String,
     project_id: i64,
     position: i64,
+}
+
+impl View {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 #[derive(Debug)]
@@ -158,8 +164,9 @@ impl Repository {
 
         tx.commit()?;
 
-        self.get_project_by_id(project_id)
-            .ok_or(anyhow::anyhow!("project not found"))
+        Ok(self
+            .get_project_by_id(project_id)?
+            .expect("INTERNAL ERROR: project not found after creation"))
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
@@ -177,8 +184,9 @@ impl Repository {
         projects.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
-    pub fn get_project_by_id(&self, id: i64) -> Option<Project> {
-        self.conn
+    pub fn get_project_by_id(&self, id: i64) -> Result<Option<Project>> {
+        Ok(self
+            .conn
             .query_row(
                 "SELECT id, name, active_view_id FROM projects WHERE id = ?1",
                 params![id],
@@ -190,12 +198,12 @@ impl Repository {
                     })
                 },
             )
-            .optional()
-            .ok()?
+            .optional()?)
     }
 
-    pub fn get_project_by_name(&self, name: &str) -> Option<Project> {
-        self.conn
+    pub fn get_project_by_name(&self, name: &str) -> Result<Option<Project>> {
+        Ok(self
+            .conn
             .query_row(
                 "SELECT id, name, active_view_id FROM projects WHERE name = ?1",
                 params![name],
@@ -207,8 +215,7 @@ impl Repository {
                     })
                 },
             )
-            .optional()
-            .ok()?
+            .optional()?)
     }
 
     pub fn list_views_for_project(&self, project: &Project) -> Result<Vec<View>> {
@@ -232,7 +239,7 @@ impl Repository {
         }
     }
 
-    pub fn get_active_view_for_project(&self, project: &Project) -> Option<View> {
+    pub fn get_active_view_for_project(&self, project: &Project) -> Result<View> {
         self.conn
             .query_row(
                 "SELECT id, name, project_id, position FROM views WHERE id = ?1",
@@ -246,8 +253,8 @@ impl Repository {
                     })
                 },
             )
-            .optional()
-            .ok()?
+            .optional()?
+            .ok_or_else(|| anyhow::anyhow!("no active view for project {}", project.name()))
     }
 
     pub fn create_view_in_project(&mut self, project: &Project, name: &str) -> Result<View> {
@@ -272,7 +279,8 @@ impl Repository {
 
         let view = self
             .get_view_by_id(view_id)
-            .ok_or(anyhow::anyhow!("view not found"))?;
+            .context("getting view by id")?
+            .ok_or_else(|| anyhow::anyhow!("view not found"))?;
         Ok(view)
     }
 
@@ -289,8 +297,9 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_view_by_id(&self, id: i64) -> Option<View> {
-        self.conn
+    pub fn get_view_by_id(&self, id: i64) -> Result<Option<View>> {
+        Ok(self
+            .conn
             .query_row(
                 "SELECT id, name, project_id, position FROM views WHERE id = ?1",
                 params![id],
@@ -303,8 +312,7 @@ impl Repository {
                     })
                 },
             )
-            .optional()
-            .ok()?
+            .optional()?)
     }
 
     pub fn rename_view(&self, view: &View, new_name: &str) -> Result<View> {
@@ -341,7 +349,7 @@ impl Repository {
     pub fn get_next_view_for_project(&self, project: &Project) -> Result<View> {
         let active_view = self
             .get_active_view_for_project(project)
-            .ok_or(anyhow::anyhow!("no active view"))?;
+            .context("getting active view for project")?;
 
         let next = self.conn.query_row(
             "SELECT views.id, views.name, views.project_id, views.position FROM views WHERE project_id = ? AND position > ? ORDER BY views.position ASC LIMIT 1",
@@ -377,7 +385,7 @@ impl Repository {
     pub fn get_prev_view_for_project(&self, project: &Project) -> Result<View> {
         let active_view = self
             .get_active_view_for_project(project)
-            .ok_or(anyhow::anyhow!("no active view"))?;
+            .context("getting active view for project")?;
 
         let next = self.conn.query_row(
             "SELECT views.id, views.name, views.project_id, views.position FROM views WHERE project_id = ? AND position < ? ORDER BY views.position DESC LIMIT 1",
@@ -516,8 +524,9 @@ impl Repository {
         Ok(())
     }
 
-    pub fn get_view_for_pin_key(&self, key: &str) -> Option<View> {
-        self.conn
+    pub fn get_view_for_pin_key(&self, key: &str) -> Result<Option<View>> {
+        Ok(self
+            .conn
             .query_row(
                 "SELECT
                   CASE
@@ -551,30 +560,29 @@ impl Repository {
                     })
                 },
             )
-            .optional()
-            .ok()?
+            .optional()?)
     }
 
-    pub fn get_pin_key_for_view(&self, view: &View) -> Option<String> {
-        self.conn
+    pub fn get_pin_key_for_view(&self, view: &View) -> Result<Option<String>> {
+        Ok(self
+            .conn
             .query_row(
                 "SELECT key FROM pins WHERE pin_type = 'view' AND view_id = ?1",
                 params![view.id],
                 |row| Ok(row.get(0)?),
             )
-            .optional()
-            .ok()?
+            .optional()?)
     }
 
-    pub fn get_pin_key_for_project(&self, project: &Project) -> Option<String> {
-        self.conn
+    pub fn get_pin_key_for_project(&self, project: &Project) -> Result<Option<String>> {
+        Ok(self
+            .conn
             .query_row(
                 "SELECT key FROM pins WHERE pin_type = 'project' AND project_id = ?1",
                 params![project.id],
                 |row| Ok(row.get(0)?),
             )
-            .optional()
-            .ok()?
+            .optional()?)
     }
 }
 
@@ -641,10 +649,10 @@ mod tests {
         let proj1 = repo.create_project("proj1").unwrap();
         let proj2 = repo.create_project("proj2").unwrap();
 
-        let project = repo.get_project_by_id(proj1.id).unwrap();
+        let project = repo.get_project_by_id(proj1.id).unwrap().unwrap();
         assert_eq!(project.name, "proj1");
 
-        let project = repo.get_project_by_id(proj2.id).unwrap();
+        let project = repo.get_project_by_id(proj2.id).unwrap().unwrap();
         assert_eq!(project.name, "proj2");
     }
 
@@ -655,7 +663,7 @@ mod tests {
 
         // we expect that id 1 is not found because we just created in memory db
         // a few lines above
-        let project = repo.get_project_by_id(1);
+        let project = repo.get_project_by_id(1).unwrap();
         assert!(project.is_none());
     }
 
@@ -667,10 +675,10 @@ mod tests {
         let proj1 = repo.create_project("proj1").unwrap();
         let proj2 = repo.create_project("proj2").unwrap();
 
-        let project = repo.get_project_by_name(proj1.name()).unwrap();
+        let project = repo.get_project_by_name(proj1.name()).unwrap().unwrap();
         assert_eq!(project.name, proj1.name);
 
-        let project = repo.get_project_by_name(proj2.name()).unwrap();
+        let project = repo.get_project_by_name(proj2.name()).unwrap().unwrap();
         assert_eq!(project.name, proj2.name);
     }
 
@@ -679,7 +687,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let repo = Repository::new(conn).unwrap();
 
-        let project = repo.get_project_by_name("not-found");
+        let project = repo.get_project_by_name("not-found").unwrap();
         assert!(project.is_none());
     }
 
@@ -732,12 +740,13 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let repo = Repository::new(conn).unwrap();
 
-        let project = repo.get_active_view_for_project(&Project {
+        let fake_project = Project {
             id: 1,
             name: "proj1".to_string(),
             active_view_id: 1,
-        });
-        assert!(project.is_none());
+        };
+
+        assert!(repo.get_active_view_for_project(&fake_project).is_err());
     }
 
     #[test]
@@ -792,7 +801,7 @@ mod tests {
 
         repo.set_active_view_for_project(&proj1, &proj1_extra_view)
             .unwrap();
-        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap();
+        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap().unwrap();
 
         let proj1_active_view = repo.get_active_view_for_project(&updated_proj1).unwrap();
         assert_eq!(proj1_active_view, proj1_extra_view);
@@ -807,7 +816,7 @@ mod tests {
 
         // make sure that there is no view with id 2
         let view_id = 2;
-        assert!(repo.get_view_by_id(view_id).is_none());
+        assert!(repo.get_view_by_id(view_id).unwrap().is_none());
 
         let view = View {
             id: view_id,
@@ -842,7 +851,7 @@ mod tests {
         let proj1 = repo.create_project("proj1").unwrap();
         let view = repo.get_active_view_for_project(&proj1).unwrap();
 
-        let retrieved_view = repo.get_view_by_id(view.id).unwrap();
+        let retrieved_view = repo.get_view_by_id(view.id).unwrap().unwrap();
         assert_eq!(retrieved_view, view);
     }
 
@@ -851,7 +860,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let repo = Repository::new(conn).unwrap();
 
-        let view = repo.get_view_by_id(1);
+        let view = repo.get_view_by_id(1).unwrap();
         assert!(view.is_none());
     }
 
@@ -866,7 +875,7 @@ mod tests {
         let new_name = "new_view_name";
         assert!(repo.rename_view(&view, new_name).is_ok());
 
-        let view = repo.get_view_by_id(view.id).unwrap();
+        let view = repo.get_view_by_id(view.id).unwrap().unwrap();
         assert_eq!(view.name, new_name);
     }
 
@@ -945,13 +954,13 @@ mod tests {
 
         // update the active view and then reload the project since we just changed it
         assert!(repo.set_active_view_for_project(&proj1, &next_view).is_ok());
-        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap();
+        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap().unwrap();
         let next_view = repo.get_next_view_for_project(&updated_proj1).unwrap();
         assert_eq!(next_view, proj1_view2);
 
         // one more time to make sure we cycle back to the first view
         assert!(repo.set_active_view_for_project(&proj1, &next_view).is_ok());
-        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap();
+        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap().unwrap();
         let next_view = repo.get_next_view_for_project(&updated_proj1).unwrap();
         assert_eq!(next_view, proj1_view0);
     }
@@ -984,13 +993,13 @@ mod tests {
 
         // update the active view and then reload the project since we just changed it
         assert!(repo.set_active_view_for_project(&proj1, &prev_view).is_ok());
-        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap();
+        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap().unwrap();
         let prev_view = repo.get_prev_view_for_project(&updated_proj1).unwrap();
         assert_eq!(prev_view, proj1_view1);
 
         // one more time to make sure we cycle back to the last view
         assert!(repo.set_active_view_for_project(&proj1, &prev_view).is_ok());
-        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap();
+        let updated_proj1 = repo.get_project_by_id(proj1.id).unwrap().unwrap();
         let prev_view = repo.get_prev_view_for_project(&updated_proj1).unwrap();
         assert_eq!(prev_view, proj1_view0);
     }
@@ -1120,7 +1129,7 @@ mod tests {
         assert!(repo.upsert_pin_for_view(key, &view).is_ok());
 
         // make sure the pin was inserted
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, view.id);
     }
 
@@ -1152,7 +1161,7 @@ mod tests {
         assert!(repo.upsert_pin_for_view(key, &proj1_view).is_ok());
 
         // make sure the pin was inserted correctly
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, proj1_view.id);
 
         // update the pin to the new view
@@ -1161,7 +1170,7 @@ mod tests {
         assert!(repo.upsert_pin_for_view(key, &proj2_view).is_ok());
 
         // make sure the pin was updated
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, proj2_view.id);
     }
 
@@ -1182,7 +1191,7 @@ mod tests {
         assert!(repo.upsert_pin_for_view(key, &proj2_view).is_ok());
 
         // make sure the pin was updated
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, proj2_view.id);
     }
 
@@ -1211,7 +1220,7 @@ mod tests {
 
         // make sure the pin was inserted
         let proj1_active_view = repo.get_active_view_for_project(&proj1).unwrap();
-        let view = repo.get_view_for_pin_key(key).unwrap();
+        let view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(view.id, proj1_active_view.id);
     }
 
@@ -1243,7 +1252,7 @@ mod tests {
         assert!(repo.upsert_pin_for_view(key, &proj1_view).is_ok());
 
         // make sure the pin was inserted correctly
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, proj1_view.id);
 
         // update the pin to the new view
@@ -1252,7 +1261,7 @@ mod tests {
         assert!(repo.upsert_pin_for_project(key, &proj2).is_ok());
 
         // make sure the pin was updated
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, proj2_view.id);
     }
 
@@ -1273,7 +1282,7 @@ mod tests {
         assert!(repo.upsert_pin_for_project(key, &proj2).is_ok());
 
         // make sure the pin was updated
-        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap().unwrap();
         assert_eq!(pinned_view.id, proj2_view.id);
     }
 
@@ -1341,7 +1350,7 @@ mod tests {
         assert!(repo.clear_pin(key).is_ok());
 
         // make sure the pin was cleared
-        let pinned_view = repo.get_view_for_pin_key(key);
+        let pinned_view = repo.get_view_for_pin_key(key).unwrap();
         assert!(pinned_view.is_none());
     }
 
@@ -1364,7 +1373,7 @@ mod tests {
         let view = repo.get_active_view_for_project(&project).unwrap();
         repo.upsert_pin_for_view(pin_key, &view).unwrap();
 
-        let retrieved_view = repo.get_view_for_pin_key(pin_key).unwrap();
+        let retrieved_view = repo.get_view_for_pin_key(pin_key).unwrap().unwrap();
         assert_eq!(retrieved_view, view);
     }
 
@@ -1377,7 +1386,7 @@ mod tests {
         let project = repo.create_project("proj1").unwrap();
         repo.upsert_pin_for_project(pin_key, &project).unwrap();
 
-        let retrieved_view = repo.get_view_for_pin_key(pin_key).unwrap();
+        let retrieved_view = repo.get_view_for_pin_key(pin_key).unwrap().unwrap();
         assert_eq!(retrieved_view.id, project.active_view_id);
     }
 
@@ -1386,7 +1395,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let repo = Repository::new(conn).unwrap();
 
-        let view = repo.get_view_for_pin_key("g");
+        let view = repo.get_view_for_pin_key("g").unwrap();
         assert!(view.is_none());
     }
 
@@ -1404,7 +1413,7 @@ mod tests {
         assert!(repo.upsert_pin_for_project(proj1_key, &proj1).is_ok());
 
         // make sure the active view is returned
-        let view = repo.get_view_for_pin_key(proj1_key).unwrap();
+        let view = repo.get_view_for_pin_key(proj1_key).unwrap().unwrap();
         assert_eq!(view.id, proj1_view0.id);
 
         // now update the active view
@@ -1412,7 +1421,7 @@ mod tests {
             .unwrap();
 
         // now get the pin again and make sure the updated view is returned
-        let view = repo.get_view_for_pin_key(proj1_key).unwrap();
+        let view = repo.get_view_for_pin_key(proj1_key).unwrap().unwrap();
         assert_eq!(view.id, proj1_view1.id);
     }
 
@@ -1421,7 +1430,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let repo = Repository::new(conn).unwrap();
 
-        let view = repo.get_view_for_pin_key("g");
+        let view = repo.get_view_for_pin_key("g").unwrap();
         assert!(view.is_none());
     }
 
@@ -1435,7 +1444,7 @@ mod tests {
         let view = repo.get_active_view_for_project(&project).unwrap();
         repo.upsert_pin_for_view(pin_key, &view).unwrap();
 
-        let retrieved_pin_key = repo.get_pin_key_for_view(&view).unwrap();
+        let retrieved_pin_key = repo.get_pin_key_for_view(&view).unwrap().unwrap();
         assert_eq!(retrieved_pin_key, pin_key);
     }
 
@@ -1451,7 +1460,7 @@ mod tests {
             position: 1,
         };
 
-        let pin_key = repo.get_pin_key_for_view(&view);
+        let pin_key = repo.get_pin_key_for_view(&view).unwrap();
         assert!(pin_key.is_none());
     }
 
@@ -1464,7 +1473,7 @@ mod tests {
         let project = repo.create_project("proj1").unwrap();
         repo.upsert_pin_for_project(pin_key, &project).unwrap();
 
-        let retrieved_pin_key = repo.get_pin_key_for_project(&project).unwrap();
+        let retrieved_pin_key = repo.get_pin_key_for_project(&project).unwrap().unwrap();
         assert_eq!(retrieved_pin_key, pin_key);
     }
 
@@ -1474,7 +1483,7 @@ mod tests {
         let mut repo = Repository::new(conn).unwrap();
 
         let project = repo.create_project("proj1").unwrap();
-        let pin_key = repo.get_pin_key_for_project(&project);
+        let pin_key = repo.get_pin_key_for_project(&project).unwrap();
         assert!(pin_key.is_none());
     }
 }

@@ -46,7 +46,7 @@ tooling in the rust world.
 
 - on commands that take names, (add project and add view), it could be nice to
 add a little "validation" to the names so that we check that names do not
-contain `#` or a `:`.  As the only user of this tool, I don't think it's a big deal, but
+contain `#`.  As the only user of this tool, I don't think it's a big deal, but
 I could imagine that I could fat finger a name and then it would be a pain to
 fix.
 
