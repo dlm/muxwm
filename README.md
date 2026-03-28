@@ -25,17 +25,16 @@ come up are: What happens if:
 
 
 ## TODO notes
-- Currently, all of our error handling in main is via unwrap.  Even for me as
-the only user it kind of sucks.  Remove the unwraps in the main and move those
-to do some better error handling.  ... bonus points if that error handling
-could have two modes one that prints to stderr the other that uses something
-like system notifications.
 
 - Currently, we take in a config file but don't use it for anything. Currently,
 the only configurable option in the tool is the path to the database. Will
 there be anything else?  If so a config file would be a good option, else,
 something like and env var would be sufficient and env var would be sufficient.
 Note that the "better" error handling would also likely use some config.
+
+- Currently, errors are reported to stderr.  It would be nice we had a mode (or
+a configuration option) that would make it so that we could use something like
+system notifications to report errors.
 
 - Currently, we have a debug mode but we don't really use it.  Either remove it
 or actually use it.  Some ways that could be useful and a good learning
