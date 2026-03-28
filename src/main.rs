@@ -451,7 +451,11 @@ fn main() -> anyhow::Result<()> {
 
                 for name in &unique_names {
                     let pin_key = if *with_pins {
-                        match repo.get_view_from_window_manager_display_name(name)? {
+                        match repo
+                            .get_view_from_window_manager_display_name(name)
+                            .ok()
+                            .flatten()
+                        {
                             Some(view) => repo
                                 .get_pin_key_for_view(&view)
                                 .context("getting pin key for view")?
