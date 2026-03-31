@@ -68,7 +68,7 @@ enum PinCommands {
 
     /// clear the pin
     Clear {
-        /// the pin key of the view on which to focus
+        /// the pin key of the view to clear
         key: String,
     },
 
