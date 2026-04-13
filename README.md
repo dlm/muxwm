@@ -25,6 +25,7 @@ come up are: What happens if:
 
 
 ## TODO notes
+- currently, if the data folder is missing we get an panic.
 
 - Currently, we take in a config file but don't use it for anything. Currently,
 the only configurable option in the tool is the path to the database. Will
