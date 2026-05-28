@@ -188,7 +188,7 @@ impl WindowManager {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let mut i3 = WindowManager::new().context("creating window manager")?;
+    let mut window_manager = WindowManager::new().context("creating window manager")?;
 
     // Check how many times the debug flag occurred for verbosity
     match cli.debug {
@@ -214,12 +214,13 @@ fn main() -> anyhow::Result<()> {
                 let display_name = repo
                     .get_window_manager_display_name(&view)
                     .context("getting display name for view")?;
-                i3.focus(&display_name)
+                window_manager
+                    .focus(&display_name)
                     .with_context(|| format!("focusing on workspace '{}'", display_name))?;
             }
 
             PinCommands::Set { key, project } => {
-                let name = i3
+                let name = window_manager
                     .get_active_workspace_name()
                     .context("getting active workspace")?;
                 if *project {
@@ -295,12 +296,13 @@ fn main() -> anyhow::Result<()> {
                 let display_name = repo
                     .get_window_manager_display_name(&view)
                     .context("getting display name for active view for project")?;
-                i3.focus(&display_name)
+                window_manager
+                    .focus(&display_name)
                     .with_context(|| format!("focusing on workspace '{}'", display_name))?;
             }
 
             ProjectCommands::ActivateNextView {} => {
-                let current_workspace = i3
+                let current_workspace = window_manager
                     .get_active_workspace_name()
                     .context("getting active workspace")?;
                 let proj = repo
@@ -322,12 +324,13 @@ fn main() -> anyhow::Result<()> {
                                 next.name()
                             )
                         })?;
-                i3.focus(&next_workspace)
+                window_manager
+                    .focus(&next_workspace)
                     .with_context(|| format!("focusing on workspace '{}'", next_workspace))?;
             }
 
             ProjectCommands::ActivatePrevView {} => {
-                let current_workspace = i3
+                let current_workspace = window_manager
                     .get_active_workspace_name()
                     .context("getting active workspace")?;
                 let proj = repo
@@ -349,12 +352,13 @@ fn main() -> anyhow::Result<()> {
                                 prev.name()
                             )
                         })?;
-                i3.focus(&previous_workspace)
+                window_manager
+                    .focus(&previous_workspace)
                     .with_context(|| format!("focusing on workspace '{}'", previous_workspace))?;
             }
 
             ProjectCommands::AddView { view_name } => {
-                let display_name = i3
+                let display_name = window_manager
                     .get_active_workspace_name()
                     .context("getting active workspace")?;
                 let proj = repo
@@ -367,7 +371,7 @@ fn main() -> anyhow::Result<()> {
             }
 
             ProjectCommands::ListViews {} => {
-                let current_workspace = i3
+                let current_workspace = window_manager
                     .get_active_workspace_name()
                     .context("getting active workspace")?;
                 let proj = repo
@@ -395,7 +399,7 @@ fn main() -> anyhow::Result<()> {
 
         Commands::View { command } => match command {
             ViewCommands::Rename { new_name } => {
-                let old_display_name = i3
+                let old_display_name = window_manager
                     .get_active_workspace_name()
                     .context("getting active workspace")?;
                 let view = repo
@@ -414,7 +418,8 @@ fn main() -> anyhow::Result<()> {
                             updated_view.name()
                         )
                     })?;
-                i3.rename_workspace(&old_display_name, &new_display_name)
+                window_manager
+                    .rename_workspace(&old_display_name, &new_display_name)
                     .with_context(|| {
                         format!(
                             "renaming workspace '{}' to '{}'",
@@ -439,7 +444,9 @@ fn main() -> anyhow::Result<()> {
                     .collect::<Result<Vec<String>, _>>()?;
 
                 let mut unique_names = if *with_unmanaged {
-                    let i3_view_names = i3.get_workspace_names().context("getting workspaces")?;
+                    let i3_view_names = window_manager
+                        .get_workspace_names()
+                        .context("getting workspaces")?;
                     HashSet::<String>::from_iter(view_names.into_iter().chain(i3_view_names))
                         .into_iter()
                         .collect::<Vec<String>>()
