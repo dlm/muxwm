@@ -330,6 +330,12 @@ impl Repository {
         )?)
     }
 
+    pub fn delete_view(&mut self, view: &View) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM views WHERE id = ?", params![view.id])?;
+        Ok(())
+    }
+
     pub fn list_views(&self) -> Result<Vec<View>> {
         let mut stmt = self
             .conn
@@ -689,6 +695,47 @@ mod tests {
 
         let project = repo.get_project_by_name("not-found").unwrap();
         assert!(project.is_none());
+    }
+
+    #[test]
+    fn test_delete_view_when_view_is_inactive() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let proj1 = repo.create_project("proj1").unwrap();
+        let proj1_view1 = repo.create_view_in_project(&proj1, "view1").unwrap();
+
+        assert_eq!(repo.list_views_for_project(&proj1).unwrap().len(), 2);
+        assert!(repo.delete_view(&proj1_view1).is_ok());
+        assert_eq!(repo.list_views_for_project(&proj1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_delete_view_when_view_is_active() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let proj1 = repo.create_project("proj1").unwrap();
+        let proj1_view0 = repo.get_active_view_for_project(&proj1).unwrap();
+
+        assert_eq!(repo.list_views_for_project(&proj1).unwrap().len(), 1);
+        assert!(repo.delete_view(&proj1_view0).is_err());
+        assert_eq!(repo.list_views_for_project(&proj1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_delete_view_when_view_is_not_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let view = View {
+            id: 1,
+            name: "view1".to_string(),
+            project_id: 1,
+            position: 1,
+        };
+
+        assert!(repo.delete_view(&view).is_ok());
     }
 
     #[test]
