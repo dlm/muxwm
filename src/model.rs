@@ -352,6 +352,25 @@ impl Repository {
         views.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    pub fn get_view_for_project_by_name(
+        &self,
+        project: &Project,
+        name: &str,
+    ) -> Result<Option<View>> {
+        Ok(self.conn.query_row(
+            "SELECT id, name, project_id, position FROM views WHERE project_id = ? AND name = ?",
+            params![project.id, name],
+            |row| {
+                Ok(View {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    project_id: row.get(2)?,
+                    position: row.get(3)?,
+                })
+            },
+        ).optional()?)
+    }
+
     pub fn get_next_view_for_project(&self, project: &Project) -> Result<View> {
         let active_view = self
             .get_active_view_for_project(project)
@@ -736,6 +755,35 @@ mod tests {
         };
 
         assert!(repo.delete_view(&view).is_ok());
+    }
+
+    #[test]
+    fn test_get_view_for_project_by_name_when_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let view_name = "view1";
+        let proj1 = repo.create_project("proj1").unwrap();
+        let _ = repo.create_view_in_project(&proj1, view_name).unwrap();
+
+        let view = repo
+            .get_view_for_project_by_name(&proj1, view_name)
+            .unwrap();
+        assert!(view.is_some());
+    }
+
+    #[test]
+    fn test_get_view_for_project_by_name_when_not_found() {
+        let conn = Connection::open_in_memory().unwrap();
+        let mut repo = Repository::new(conn).unwrap();
+
+        let view_name = "view1";
+        let proj1 = repo.create_project("proj1").unwrap();
+
+        let view = repo
+            .get_view_for_project_by_name(&proj1, view_name)
+            .unwrap();
+        assert!(view.is_none())
     }
 
     #[test]
