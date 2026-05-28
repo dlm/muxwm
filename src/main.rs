@@ -112,6 +112,15 @@ enum ProjectCommands {
         view_name: String,
     },
 
+    /// delete a view from the currently active project.
+    ///
+    /// To delete a view, the underlying workspace must be empty
+    /// and the view must not be active.
+    DeleteView {
+        /// the name of the view to delete
+        view_name: String,
+    },
+
     /// list all views for the current active project
     ListViews {},
 }
@@ -382,6 +391,43 @@ fn main() -> anyhow::Result<()> {
                     })?;
                 repo.create_view_in_project(&proj, &view_name)
                     .with_context(|| format!("creating view for project '{}'", proj.name()))?;
+            }
+
+            ProjectCommands::DeleteView { view_name } => {
+                let display_name = window_manager
+                    .get_active_workspace_name()
+                    .context("getting active workspace")?;
+
+                let proj = repo
+                    .get_project_from_window_manager_display_name(&display_name)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("no project found for display name '{}'", display_name)
+                    })?;
+
+                let to_delete = repo
+                    .get_view_for_project_by_name(&proj, view_name)
+                    .context("getting view in project")?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("no view in project with name '{}'", view_name)
+                    })?;
+
+                // make sure that it is not active
+                if proj.is_active_view(&to_delete) {
+                    anyhow::bail!("trying to delete an active view");
+                }
+
+                // make sure that it is empty
+                let to_delete_wm_name = repo
+                    .get_window_manager_display_name(&to_delete)
+                    .context("getting window manager display name")?;
+                let is_empty = window_manager
+                    .is_workspace_empty(&to_delete_wm_name)
+                    .context("checking for empty workspace")?;
+                if !is_empty {
+                    anyhow::bail!("trying to delete a view with a non-empty workspace");
+                }
+
+                repo.delete_view(&to_delete).context("deleting view")?;
             }
 
             ProjectCommands::ListViews {} => {
