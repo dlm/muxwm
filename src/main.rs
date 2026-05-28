@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use i3ipc::I3Connection;
+use i3ipc::{I3Connection, reply::NodeType};
 
 mod model;
 use model::Repository;
@@ -183,6 +183,20 @@ impl WindowManager {
             .run_command(&cmd)
             .context("renameing workspace")?;
         Ok(())
+    }
+
+    fn is_workspace_empty(&mut self, name: &str) -> Result<bool> {
+        let root = self.connection.get_tree().context("getting tree")?;
+
+        Ok(root
+            .nodes
+            .iter()
+            .flat_map(|n| n.nodes.iter()) // content and dock area nodes
+            .flat_map(|n| n.nodes.iter()) // workspaces
+            .find(|n| {
+                n.nodetype == NodeType::Workspace && n.name.as_deref().unwrap_or_default() == name
+            })
+            .is_none())
     }
 }
 
