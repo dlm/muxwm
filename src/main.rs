@@ -133,7 +133,7 @@ enum ViewCommands {
         with_unmanaged: bool,
     },
 
-    // rename the currently active view
+    /// rename the currently active view
     Rename {
         /// the new name of the view
         new_name: String,
