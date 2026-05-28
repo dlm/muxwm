@@ -30,6 +30,10 @@ impl Project {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    pub fn is_active_view(&self, view: &View) -> bool {
+        return self.active_view_id == view.id;
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
