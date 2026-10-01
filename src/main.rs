@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -223,6 +224,10 @@ fn main() -> anyhow::Result<()> {
 
     let home = std::env::var("HOME").context("getting $HOME")?;
     let db_path = PathBuf::from(home).join(".local/share/muxwm/muxwm.db");
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).context("creating data directory")?;
+    }
+
     let conn = Connection::open(&db_path)
         .with_context(|| format!("opening database at {}", db_path.display()))?;
     let mut repo = Repository::new(conn).context("creating repository")?;
